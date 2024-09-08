@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ok</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.13.0/mapbox-gl.js"></script>
+    <link
+      href="https://api.mapbox.com/mapbox-gl-js/v2.13.0/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <script>
+      // Inisialisasi Firebase
+      const firebaseConfig = {
+        apiKey: "AIzaSyBI26xuvsw4_3n8s-jYduCtn0ezd_nVgMc",
+        authDomain: "velinked-coba.firebaseapp.com",
+        databaseURL:
+          "https://velinked-coba-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "velinked-coba",
+        storageBucket: "velinked-coba.appspot.com",
+        messagingSenderId: "213648144998",
+        appId: "1:213648144998:web:fc24fc894af2363d074ba7",
+        measurementId: "G-26RBCMTKCS",
+      };
+
+      firebase.initializeApp(firebaseConfig);
+      const database = firebase.database();
+
+      // Setup Mapbox
+      mapboxgl.accessToken =
+        "pk.eyJ1IjoiaGVsbHlvc2hhcWlxaWUiLCJhIjoiY20wMzloNm81MDlqOTJxc2ExOWp3eWJkbiJ9.bfRMSLMCqZ_A1oyrRbaUdg";
+      const map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [111.907319, -8.076697],
+        zoom: 15,
+      });
+
+      let marker;
+      let polylineCoordinates = [];
+
+      // bearing
+      function calculateBearing(start, end) {
+        const startLat = start[1] * (Math.PI / 180);
+        const startLng = start[0] * (Math.PI / 180);
+        const endLat = end[1] * (Math.PI / 180);
+        const endLng = end[0] * (Math.PI / 180);
+
+        const dLng = endLng - startLng;
+        const y = Math.sin(dLng) * Math.cos(endLat);
+        const x =
+          Math.cos(startLat) * Math.sin(endLat) -
+          Math.sin(startLat) * Math.cos(endLat) * Math.cos(dLng);
+        const bearing = Math.atan2(y, x) * (180 / Math.PI);
+        return (bearing + 360) % 360;
+      }
+
+      // snap to road
+      function snapToRoad(coordinates, callback) {
+        const coordsStr = coordinates.map((c) => `${c[0]},${c[1]}`).join(";");
+        const url = `https://api.mapbox.com/matching/v5/mapbox/driving/${coordsStr}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+
+        fetch(url)
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.matchings && data.matchings.length > 0) {
+              const snappedCoords = data.matchings[0].geometry.coordinates;
+              callback(snappedCoords);
+            } else {
+              callback(coordinates); //lek tidak ada snap maka gunakan koordinat asli
+            }
+          })
+          .catch(() => {
+            callback(coordinates);
+          });
+      }
+
+      // Fungsi Gambar Polyline
+      function drawPolyline(coordinates) {
+        if (coordinates.length === 0) {
+          console.warn("Tidak ada koordinat untuk digambar");
+          return;
+        }
+
+        if (map.getSource("route")) {
+          map.getSource("route").setData({
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: coordinates,
+            },
+          });
+        } else {
+          map.addSource("route", {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: coordinates,
+              },
+            },
+          });
+
+          map.addLayer({
+            id: "route",
+            type: "line",
+            source: "route",
+            layout: {
+              "line-join": "round",
+              "line-cap": "round",
+            },
+            paint: {
+              "line-color": "#5243E6",
+              "line-width": 6,
+            },
+          });
+        }
+      }
+
+      // memperbarui fungsi marker
+      function updateMarker(lat, lng) {
+        const newCoord = [lng, lat];
+        polylineCoordinates.push(newCoord);
+
+        snapToRoad(polylineCoordinates, (snappedCoordinates) => {
+          if (!marker) {
+            const el = document.createElement("div");
+            el.style.position = "relative";
+            el.innerHTML = `
+              <img src="circle.gif" width="50" height="50" alt="Circle" style="position: absolute; top: 0; left: 0; z-index: 1;">
+              <img id="car-icon" src="car22.svg" width="50" height="50" alt="Car" style="position: absolute; top: 0; left: 0; z-index: 2;">
+            `;
+            el.style.width = "50px";
+            el.style.height = "50px";
+            el.style.transformOrigin = "center";
+            marker = new mapboxgl.Marker(el).setLngLat(newCoord).addTo(map);
+          } else {
+            const lastCoord = snappedCoordinates[snappedCoordinates.length - 1];
+            const previousCoord =
+              snappedCoordinates[snappedCoordinates.length - 2];
+
+            if (previousCoord) {
+              const bearing = calculateBearing(previousCoord, lastCoord);
+              const carIcon = document.getElementById("car-icon");
+              if (carIcon) {
+                carIcon.style.transform = `rotate(${bearing}deg)`;
+              }
+            }
+
+            marker.setLngLat(newCoord);
+          }
+
+          drawPolyline(snappedCoordinates); // bagian polyline
+
+          // Simpan lokasi ke Firebase
+          reverseGeocode(lat, lng, (desa, kota) => {
+            addLocationToFirebase(lat, lng, desa, kota);
+          });
+        });
+      }
+
+      // get nama desa dan kota
+      function reverseGeocode(lat, lng, callback) {
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=place,locality`;
+
+        fetch(url)
+          .then((response) => response.json())
+          .then((data) => {
+            let desa = "Tidak diketahui";
+            let kota = "Tidak diketahui";
+
+            if (data.features && data.features.length > 0) {
+              const place = data.features.find((f) =>
+                f.place_type.includes("place")
+              );
+              const locality = data.features.find((f) =>
+                f.place_type.includes("locality")
+              );
+
+              desa = locality ? locality.text : desa;
+              kota = place ? place.text : kota;
+            }
+
+            callback(desa, kota);
+          })
+          .catch((error) => {
+            console.error("Error during reverse geocoding:", error);
+            callback("Tidak diketahui", "Tidak diketahui");
+          });
+      }
+
+      // Fungsi untuk menambahkan lokasi ke Firebase
+      function addLocationToFirebase(lat, lng, desa, kota) {
+        const timestamp = new Date().toISOString();
+        const newLocationRef = database.ref("Vehicle/").push();
+        newLocationRef.set({
+          lat: lat,
+          lng: lng,
+          timestamp: timestamp,
+          desa: desa,
+          kota: kota,
+        });
+      }
+
+      // Simulasi Klik
+      map.on("click", (e) => {
+        const { lng, lat } = e.lngLat;
+        updateMarker(lat, lng);
+      });
+    </script>
+  </body>
+</html>
