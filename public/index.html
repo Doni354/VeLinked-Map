@@ -27,22 +27,42 @@
   <body>
     <div id="map"></div>
 
-    <script>
-      // Inisialisasi Firebase
-      const firebaseConfig = {
-        apiKey: "AIzaSyBI26xuvsw4_3n8s-jYduCtn0ezd_nVgMc",
-        authDomain: "velinked-coba.firebaseapp.com",
-        databaseURL:
-          "https://velinked-coba-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "velinked-coba",
-        storageBucket: "velinked-coba.appspot.com",
-        messagingSenderId: "213648144998",
-        appId: "1:213648144998:web:fc24fc894af2363d074ba7",
-        measurementId: "G-26RBCMTKCS",
-      };
+    <script type="module">
+      // Import Firebase dan Mapbox
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+import { getDatabase, ref as dbRef, onValue, set, push, remove, update } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
-      firebase.initializeApp(firebaseConfig);
-      const database = firebase.database();
+// Firebase Config
+const firebaseConfig = {
+    apiKey: "AIzaSyB9qUzLViR5uALw9Qf_xzJpd20acoV0FEs",
+    authDomain: "velinked-web.firebaseapp.com",
+    databaseURL: "https://velinked-web-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "velinked-web",
+    storageBucket: "velinked-web.appspot.com",
+    messagingSenderId: "844821073092",
+    appId: "1:844821073092:web:f243c25668079240ec0d91",
+    measurementId: "G-CLGQ4RWWTX"
+};
+
+// Inisialisasi Firebase
+const app = initializeApp(firebaseConfig);
+const realtimeDB = getDatabase(app);
+const storage = getStorage(app);
+const storageRef = ref(storage);
+// Ambil parameter dari URL
+function getParameterByName(name, url) {
+    if (!url) url = window.location.href;
+    name = name.replace(/[[\]]/g, '\\$&');
+    var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+        results = regex.exec(url);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, ' '));
+}
+
+const docId = getParameterByName('docId');
+const vehicleRef = dbRef(realtimeDB, 'Vehicle/' + docId);
 
       // Setup Mapbox
      
